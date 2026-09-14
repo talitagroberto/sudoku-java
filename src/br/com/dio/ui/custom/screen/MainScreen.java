@@ -2,10 +2,10 @@ package br.com.dio.ui.custom.screen;
 
 import br.com.dio.model.Space;
 import br.com.dio.service.BoardService;
-import br.com.dio.service.EventEnum;
 import br.com.dio.service.NotifierService;
 import br.com.dio.ui.custom.button.CheckGameStatusButton;
 import br.com.dio.ui.custom.button.FinishGameButton;
+import br.com.dio.ui.custom.button.InstructionsButton;
 import br.com.dio.ui.custom.button.ResetButton;
 import br.com.dio.ui.custom.frame.MainFrame;
 import br.com.dio.ui.custom.input.NumberText;
@@ -29,7 +29,7 @@ import static javax.swing.JOptionPane.showMessageDialog;
 
 public class MainScreen {
 
-    private final static Dimension dimension = new Dimension(600, 600);
+    private static final Dimension SCREEN_DIMENSION = new Dimension(600, 600);
 
     private final BoardService boardService;
     private final NotifierService notifierService;
@@ -43,88 +43,163 @@ public class MainScreen {
         this.notifierService = new NotifierService();
     }
 
-    public void buildMainScreen(){
-        JPanel mainPanel = new MainPanel(dimension);
-        JFrame mainFrame = new MainFrame(dimension, mainPanel);
-        for (int r = 0; r < 9; r+=3) {
-            var endRow = r + 2;
-            for (int c = 0; c < 9; c+=3) {
-                var endCol = c + 2;
-                var spaces = getSpacesFromSector(boardService.getSpaces(), c, endCol, r, endRow);
+    public void buildMainScreen() {
+        JPanel mainPanel = new MainPanel(SCREEN_DIMENSION);
+        JFrame mainFrame = new MainFrame(SCREEN_DIMENSION, mainPanel);
+
+        for (int row = 0; row < 9; row += 3) {
+            var endRow = row + 2;
+
+            for (int column = 0; column < 9; column += 3) {
+                var endColumn = column + 2;
+                var spaces = getSpacesFromSector(
+                        boardService.getSpaces(),
+                        column,
+                        endColumn,
+                        row,
+                        endRow
+                );
+
                 JPanel sector = generateSection(spaces);
                 mainPanel.add(sector);
             }
         }
+
         addResetButton(mainPanel);
         addCheckGameStatusButton(mainPanel);
         addFinishGameButton(mainPanel);
+        addInstructionsButton(mainPanel);
+
         mainFrame.revalidate();
         mainFrame.repaint();
     }
 
-    private List<Space> getSpacesFromSector(final List<List<Space>> spaces,
-                                            final int initCol, final int endCol,
-                                            final int initRow, final int endRow){
-        List<Space> spaceSector = new ArrayList<>();
-        for (int r = initRow; r <= endRow; r++) {
-            for (int c = initCol; c <= endCol; c++) {
-                spaceSector.add(spaces.get(c).get(r));
+    private List<Space> getSpacesFromSector(
+            final List<List<Space>> spaces,
+            final int initialColumn,
+            final int finalColumn,
+            final int initialRow,
+            final int finalRow
+    ) {
+        List<Space> sectorSpaces = new ArrayList<>();
+
+        for (int row = initialRow; row <= finalRow; row++) {
+            for (int column = initialColumn; column <= finalColumn; column++) {
+                sectorSpaces.add(spaces.get(column).get(row));
             }
         }
-        return spaceSector;
+
+        return sectorSpaces;
     }
 
-    private JPanel generateSection(final List<Space> spaces){
-        List<NumberText> fields = new ArrayList<>(spaces.stream().map(NumberText::new).toList());
-        fields.forEach(t -> notifierService.subscribe(CLEAR_SPACE, t));
+    private JPanel generateSection(final List<Space> spaces) {
+        List<NumberText> fields = new ArrayList<>(
+                spaces.stream().map(NumberText::new).toList()
+        );
+
+        fields.forEach(field ->
+                notifierService.subscribe(CLEAR_SPACE, field)
+        );
+
         return new SudokuSector(fields);
     }
 
     private void addFinishGameButton(final JPanel mainPanel) {
-        finishGameButton = new FinishGameButton(e -> {
-            if (boardService.gameIsFinished()){
-                showMessageDialog(null, "Parabéns você concluiu o jogo");
+        finishGameButton = new FinishGameButton(event -> {
+            if (boardService.gameIsFinished()) {
+                showMessageDialog(
+                        null,
+                        "Parabéns! Você concluiu o jogo corretamente.",
+                        "Jogo concluído",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+
                 resetButton.setEnabled(false);
                 checkGameStatusButton.setEnabled(false);
                 finishGameButton.setEnabled(false);
             } else {
-                var message = "Seu jogo tem alguma inconsistência, ajuste e tente novamente";
-                showMessageDialog(null, message);
+                showMessageDialog(
+                        null,
+                        "O jogo possui alguma inconsistência. Revise os números e tente novamente.",
+                        "Não foi possível finalizar",
+                        JOptionPane.WARNING_MESSAGE
+                );
             }
         });
+
         mainPanel.add(finishGameButton);
     }
 
     private void addCheckGameStatusButton(final JPanel mainPanel) {
-        checkGameStatusButton = new CheckGameStatusButton(e -> {
+        checkGameStatusButton = new CheckGameStatusButton(event -> {
             var hasErrors = boardService.hasErrors();
             var gameStatus = boardService.getStatus();
-            var message = switch (gameStatus){
-                case NON_STARTED -> "O jogo não foi iniciado";
-                case INCOMPLETE -> "O jogo está imcompleto";
-                case COMPLETE -> "O jogo está completo";
+
+            var message = switch (gameStatus) {
+                case NON_STARTED -> "O jogo ainda não foi iniciado.";
+                case INCOMPLETE -> hasErrors
+                        ? "O jogo está incompleto e contém erros."
+                        : "O jogo está incompleto e não contém erros.";
+                case COMPLETE -> hasErrors
+                        ? "O jogo está completo, mas contém erros."
+                        : "O jogo está completo e não contém erros.";
             };
-            message += hasErrors ? " e contém erros" : " e não contém erros";
-            showMessageDialog(null, message);
+
+            showMessageDialog(
+                    null,
+                    message,
+                    "Status do jogo",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
         });
-        mainPanel.add(MainScreen.this.checkGameStatusButton);
+
+        mainPanel.add(checkGameStatusButton);
     }
 
     private void addResetButton(final JPanel mainPanel) {
-        resetButton = new ResetButton(e ->{
+        resetButton = new ResetButton(event -> {
             var dialogResult = showConfirmDialog(
                     null,
                     "Deseja realmente reiniciar o jogo?",
-                    "Limpar o jogo",
+                    "Reiniciar jogo",
                     YES_NO_OPTION,
                     QUESTION_MESSAGE
             );
-            if (dialogResult == 0){
+
+            if (dialogResult == JOptionPane.YES_OPTION) {
                 boardService.reset();
                 notifierService.notify(CLEAR_SPACE);
             }
         });
+
         mainPanel.add(resetButton);
+    }
+
+    private void addInstructionsButton(final JPanel mainPanel) {
+        var instructionsButton = new InstructionsButton(event -> {
+            var instructions = """
+                    Objetivo:
+                    Preencha as células vazias com números de 1 a 9.
+
+                    Regras:
+                    - Não repita números na mesma linha.
+                    - Não repita números na mesma coluna.
+                    - Não repita números no mesmo bloco 3x3.
+                    - Os números iniciais do tabuleiro não podem ser alterados.
+
+                    Utilize os botões para verificar o status,
+                    reiniciar ou finalizar o jogo.
+                    """;
+
+            showMessageDialog(
+                    null,
+                    instructions,
+                    "Como jogar",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        });
+
+        mainPanel.add(instructionsButton);
     }
 
 }
